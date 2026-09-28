@@ -1,0 +1,39 @@
+# Conda / Python environment
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment variables / API keys
+.env
+.env.*
+!.env.example
+
+# Local data
+data/raw/*
+data/processed/*
+
+# Vector databases
+chroma_db/
+vectorstore/
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Build files
+build/
+dist/
+*.egg-info/
