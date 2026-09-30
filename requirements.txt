@@ -7,3 +7,4 @@ langchain-text-splitters
 langchain-groq
 validators
 pandas
+pyhon-docx
