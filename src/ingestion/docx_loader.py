@@ -3,15 +3,6 @@ from langchain_core.documents import Document as LangChainDocument
 
 
 def load_docx(file_path: str):
-    """
-    Load text from a DOCX file.
-
-    Args:
-        file_path: Path to the DOCX file.
-
-    Returns:
-        List of LangChain Document objects.
-    """
 
     doc = Document(file_path)
 

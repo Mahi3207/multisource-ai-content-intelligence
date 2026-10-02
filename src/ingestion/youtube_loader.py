@@ -5,7 +5,6 @@ from langchain_core.documents import Document
 from youtube_transcript_api import YouTubeTranscriptApi
 
 def extract_video_id(url: str) -> str:
-    """Extract the YouTube video ID from a YouTube URL."""
 
     patterns = [
         r"(?:youtube\.com/watch\?.*v=)([a-zA-Z0-9_-]{11})",
@@ -26,15 +25,6 @@ def extract_video_id(url: str) -> str:
     )
 
 def load_youtube(url: str):
-    """
-    Load transcript content from a YouTube video.
-
-    Args:
-        url: YouTube video URL.
-
-    Returns:
-        List containing a LangChain Document object.
-    """
 
     video_id = extract_video_id(url)
 

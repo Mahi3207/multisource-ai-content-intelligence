@@ -7,4 +7,9 @@ langchain-text-splitters
 langchain-groq
 validators
 pandas
+pypdf
+youtube-transcript-api
 pyhon-docx
+langchain-text-splitters
+sentence-transformers
+langchain-huggingface
