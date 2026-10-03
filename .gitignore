@@ -37,3 +37,6 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+# Chroma vector database
+data/vector_store/
