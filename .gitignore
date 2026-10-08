@@ -1,42 +1,38 @@
-# Conda / Python environment
-.venv/
-env/
-
-# Python cache
-__pycache__/
-*.py[cod]
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Environment variables / API keys
+# Environment / secrets
 .env
 .env.*
 !.env.example
 
-# Local data
-data/raw/*
-data/processed/*
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
 
-# Vector databases
+# Jupyter
+.ipynb_checkpoints/
+
+# Local / generated data
+data/raw/
+data/processed/
+data/vector_store/
 chroma_db/
 vectorstore/
 
-# IDE
+# Downloaded audio / model caches
+*.mp3
+*.m4a
+*.webm
+*.wav
+
+# IDE / OS
 .vscode/
 .idea/
-
-# OS files
 .DS_Store
 Thumbs.db
-
-# Logs
 *.log
-
-# Build files
-build/
-dist/
-*.egg-info/
-
-# Chroma vector database
-data/vector_store/
