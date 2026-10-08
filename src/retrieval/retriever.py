@@ -1,7 +1,7 @@
-def create_retriever(vector_store, k=3):
-
-    retriever = vector_store.as_retriever(
-        search_kwargs={"k": k}
+def create_retriever(vector_store, doc_id: str, k: int = 4):
+    return vector_store.as_retriever(
+        search_kwargs={
+            "k": k,
+            "filter": {"doc_id": doc_id},
+        }
     )
-
-    return retriever

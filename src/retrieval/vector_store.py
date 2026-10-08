@@ -1,29 +1,44 @@
+import uuid
+
+import chromadb
 from langchain_chroma import Chroma
 
 
-COLLECTION_NAME = "content_intelligence"
+def new_document_id() -> str:
+    return uuid.uuid4().hex
 
 
-def create_vector_store(documents, embedding_model):
-    """
-    Create an in-memory Chroma vector store.
+def _simple_metadata(metadata: dict) -> dict:
+    # Chroma supports only simple metadata values.
+    return {
+        key: value
+        for key, value in metadata.items()
+        if isinstance(value, (str, int, float, bool))
+    }
 
-    A fresh vector store is created every time content
-    is processed, preventing different documents from
-    being mixed together.
 
-    Args:
-        documents: List of LangChain Document objects.
-        embedding_model: Embedding model used for vector generation.
+def create_vector_store(chunks, embedding_model, doc_id: str):
+    if not chunks:
+        raise ValueError("Cannot create a vector store without chunks.")
 
-    Returns:
-        Chroma vector store.
-    """
+    for chunk in chunks:
+        chunk.metadata = _simple_metadata(chunk.metadata)
+        chunk.metadata["doc_id"] = doc_id
 
-    vector_store = Chroma.from_documents(
-        documents=documents,
-        embedding=embedding_model,
-        collection_name=COLLECTION_NAME
+    vector_store = Chroma(
+        collection_name=f"doc_{doc_id}",
+        embedding_function=embedding_model,
+        client=chromadb.EphemeralClient(),
+        collection_metadata={"hnsw:space": "cosine"},
     )
 
+    vector_store.add_documents(chunks)
+
     return vector_store
+
+
+def delete_vector_store(vector_store) -> None:
+    try:
+        vector_store.delete_collection()
+    except Exception:
+        pass
