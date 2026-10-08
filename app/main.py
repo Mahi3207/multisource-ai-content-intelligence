@@ -1,54 +1,111 @@
-
+import logging
 import os
 import sys
 import tempfile
+
 import streamlit as st
 
-# Make project root accessible
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Make the project root available for src imports.
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 
-from src.ingestion.content_loader import load_content
-from src.processing.text_processor import split_documents
+from src.config import TOO_LARGE_MESSAGE
 from src.embeddings.embedding_service import get_embedding_model
-from src.retrieval.vector_store import create_vector_store
-from src.retrieval.retriever import create_retriever
-from src.rag.qa_chain import answer_question
-from src.intelligence.content_analyzer import analyze_content
-
-from dotenv import load_dotenv
-from langchain_groq import ChatGroq
+from src.exception import ContentIntelligenceError, ContentTooLargeError
+from src.llm_service import get_llm
+from src.pipeline import process_source, release_content
+from src.rag.qa_chain import answer_question, format_source_label
 
 
-load_dotenv()
+logger = logging.getLogger(__name__)
+
 
 st.set_page_config(
     page_title="AI Content Intelligence",
     page_icon="🧠",
-    layout="wide"
+    layout="wide",
 )
+
 
 @st.cache_resource
 def initialize_models():
-    api_key = os.getenv("GROQ_API_KEY")
+    return get_llm(), get_embedding_model()
 
-    if not api_key:
-        raise ValueError("GROQ_API_KEY was not found.")
 
-    llm = ChatGroq(
-        model="openai/gpt-oss-20b",
-        groq_api_key=api_key,
-        temperature=0
-    )
+def clear_current_content():
+    release_content(st.session_state.pop("content", None))
+    st.session_state.pop("last_result", None)
+    st.session_state["user_question"] = ""
 
-    embedding_model = get_embedding_model()
 
-    return llm, embedding_model
+def process(source, display_name=None):
+    # A new source replaces the previous one.
+    clear_current_content()
+
+    progress_bar = st.progress(0.0, text="Starting...")
+
+    def on_progress(message, fraction):
+        progress_bar.progress(
+            min(max(fraction, 0.0), 1.0),
+            text=message,
+        )
+
+    try:
+        with st.spinner(
+            "Processing content... "
+            "(videos without subtitles are transcribed first)"
+        ):
+            st.session_state["content"] = process_source(
+                source,
+                embedding_model,
+                llm,
+                display_name=display_name,
+                progress=on_progress,
+            )
+
+        progress_bar.empty()
+        st.success("Content processed successfully!")
+
+    except ContentTooLargeError:
+        progress_bar.empty()
+        st.warning(TOO_LARGE_MESSAGE)
+
+    except ContentIntelligenceError as error:
+        progress_bar.empty()
+        st.error(str(error))
+
+    except ValueError as error:
+        progress_bar.empty()
+        st.error(str(error))
+
+    except Exception:
+        logger.exception("Unexpected error while processing content")
+        progress_bar.empty()
+        st.error(
+            "Something went wrong while processing this content. "
+            "Please try again or use a different source."
+        )
 
 
 st.title("🧠 AI Content Intelligence")
 st.caption("Analyze content and ask questions using AI.")
 
-llm, embedding_model = initialize_models()
+try:
+    llm, embedding_model = initialize_models()
+
+except ValueError as error:
+    st.error(str(error))
+    st.stop()
+
+except Exception:
+    logger.exception("Could not initialise models")
+    st.error(
+        "The AI models could not be started. "
+        "Please check your setup and try again."
+    )
+    st.stop()
+
 
 st.divider()
 
@@ -57,7 +114,7 @@ st.subheader("Upload or provide content")
 input_method = st.radio(
     "Choose input method",
     ["Upload a file", "Enter a URL"],
-    horizontal=True
+    horizontal=True,
 )
 
 uploaded_file = None
@@ -66,106 +123,105 @@ url = ""
 if input_method == "Upload a file":
     uploaded_file = st.file_uploader(
         "Upload PDF or DOCX",
-        type=["pdf", "docx"]
+        type=["pdf", "docx"],
     )
 else:
     url = st.text_input(
         "Website or YouTube URL",
-        placeholder="https://..."
+        placeholder="https://...",
     )
+
 
 if st.button("Process Content", type="primary"):
     if uploaded_file is None and not url.strip():
         st.warning("Please upload a file or enter a URL.")
+
+    elif uploaded_file is not None:
+        file_name = os.path.basename(uploaded_file.name)
+
+        with tempfile.TemporaryDirectory(
+            ignore_cleanup_errors=True
+        ) as temp_dir:
+            temp_path = os.path.join(temp_dir, file_name)
+
+            with open(temp_path, "wb") as temp_file:
+                temp_file.write(uploaded_file.getvalue())
+
+            process(temp_path, display_name=file_name)
+
     else:
-        try:
-            with st.spinner("Processing content..."):
-                if uploaded_file is not None:
-                    suffix = os.path.splitext(uploaded_file.name)[1]
-
-                    with tempfile.NamedTemporaryFile(
-                        delete=False,
-                        suffix=suffix
-                    ) as temp_file:
-                        temp_file.write(uploaded_file.getvalue())
-                        temp_path = temp_file.name
-
-                    try:
-                        documents = load_content(temp_path)
-                    finally:
-                        os.remove(temp_path)
-                else:
-                    documents = load_content(url)
-
-                if not documents:
-                    st.error("No text could be extracted from this source.")
-                    st.stop()
-
-                chunks = split_documents(documents)
-
-                if not chunks:
-                    st.error("No usable text chunks were generated.")
-                    st.stop()
-
-                vector_store = create_vector_store(
-                    chunks,
-                    embedding_model
-                )
-
-                analysis = analyze_content(
-                    chunks,
-                    llm
-                )
-
-                st.session_state.documents = documents
-                st.session_state.chunks = chunks
-                st.session_state.vector_store = vector_store
-                st.session_state.retriever = create_retriever(
-                    vector_store,
-                    k=3
-                )
-                st.session_state.analysis = analysis
-                st.session_state.processed = True
-
-            st.success("Content processed successfully!")
-
-        except Exception as e:
-            st.error(f"Processing failed: {e}")
+        process(url.strip())
 
 
-if st.session_state.get("processed", False):
+content = st.session_state.get("content")
+
+if content is not None:
     st.divider()
+
+    st.caption(
+        f"Current content: **{content.name}** "
+        f"({content.source_type}, "
+        f"{content.total_chars:,} characters, "
+        f"{len(content.chunks)} chunks)"
+    )
+
     st.subheader("Content Analysis")
-    st.markdown(st.session_state.analysis)
+    st.markdown(content.analysis)
 
     st.divider()
     st.subheader("Ask Questions")
 
     question = st.text_input(
         "Ask a question about your content",
-        key="user_question"
+        key="user_question",
     )
 
     if st.button("Get Answer"):
         if not question.strip():
             st.warning("Please enter a question.")
+
         else:
             try:
                 with st.spinner("Generating answer..."):
-                    result = answer_question(
-                        question,
-                        st.session_state.retriever,
-                        llm
-                    )
+                    st.session_state["last_result"] = {
+                        "doc_id": content.doc_id,
+                        "question": question,
+                        **answer_question(
+                            question,
+                            content.retriever,
+                            llm,
+                            analysis=content.analysis,
+                        ),
+                    }
 
-                st.markdown("### Answer")
-                st.write(result["answer"])
+            except Exception:
+                logger.exception("Question answering failed")
+                st.session_state.pop("last_result", None)
+                st.error(
+                    "The question could not be answered right now. "
+                    "Please try again."
+                )
 
-                with st.expander("View retrieved sources"):
-                    for i, document in enumerate(result["sources"]):
-                        st.markdown(f"**Source {i + 1}**")
-                        st.write(document.page_content)
-                        st.caption(str(document.metadata))
+    result = st.session_state.get("last_result")
 
-            except Exception as e:
-                st.error(f"Question answering failed: {e}")
+    # Don't display an answer from an older document.
+    if result and result["doc_id"] == content.doc_id:
+        st.markdown("### Answer")
+        st.write(result["answer"])
+
+        st.markdown("### Retrieved Sources")
+
+        if result["mode"] == "overview":
+            st.caption(
+                "This is a document-level question, so it was answered "
+                "from the analysis of the entire document rather than "
+                "from a few chunks."
+            )
+
+        with st.expander("View retrieved sources", expanded=True):
+            for i, document in enumerate(result["sources"]):
+                st.markdown(
+                    f"**Source {i + 1}** — "
+                    f"{format_source_label(document.metadata)}"
+                )
+                st.write(document.page_content)

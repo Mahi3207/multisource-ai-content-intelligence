@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, List
 
 from src.config import RETRIEVAL_K
-from src.exceptions import ContentLoadError
+from src.exception import ContentLoadError
 from src.ingestion.content_loader import detect_source_type, load_content
 from src.intelligence.content_analyzer import analyze_content, check_size
 from src.processing.text_processor import clean_documents, split_documents
