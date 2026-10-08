@@ -1,27 +1,29 @@
 from langchain_chroma import Chroma
 
 
-VECTOR_STORE_PATH = "data/vector_store"
 COLLECTION_NAME = "content_intelligence"
 
 
 def create_vector_store(documents, embedding_model):
     """
-    Create a persistent Chroma vector store from LangChain documents.
+    Create an in-memory Chroma vector store.
+
+    A fresh vector store is created every time content
+    is processed, preventing different documents from
+    being mixed together.
 
     Args:
         documents: List of LangChain Document objects.
         embedding_model: Embedding model used for vector generation.
 
     Returns:
-        Persistent Chroma vector store.
+        Chroma vector store.
     """
 
     vector_store = Chroma.from_documents(
         documents=documents,
         embedding=embedding_model,
-        collection_name=COLLECTION_NAME,
-        persist_directory=VECTOR_STORE_PATH
+        collection_name=COLLECTION_NAME
     )
 
     return vector_store
